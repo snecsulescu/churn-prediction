@@ -11,7 +11,7 @@ sqlContext = SQLContext(sc)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def load_web_sessions():
+def load_web_sessions(dir):
     """ Load the Websessions table in the memory
     :return: DataFrame with the websessions information useful for the ML system
     """
@@ -35,14 +35,14 @@ def load_web_sessions():
 
     df = sqlContext.read.format('com.databricks.spark.csv') \
         .options(header='false', delimiter='\t', nullValue='\\N') \
-        .load(constants.DIR_WEBSESSIONS, schema=customSchema)
+        .load(get_dir_websessions(dir), schema=customSchema)
 
     return df
 
 
-def load_customers():
+def load_customers(dir):
     """ Load the Customers table in the memory
-    :return: DataFrame with the websessions information useful for the ML system
+    :return: DataFrame with the customer information
     """
     customSchema = StructType([ \
         StructField("customerId2", IntegerType(), True), \
@@ -55,18 +55,15 @@ def load_customers():
 
     df = sqlContext.read.format('com.databricks.spark.csv') \
         .options(header='false', delimiter='\t', nullValue='\\N') \
-        .load(constants.DIR_CUSTOMERS + '/*', schema=customSchema)
+        .load(get_dir_customers(dir) + '/*', schema=customSchema)
 
     return df
 
-def features_websessions():
+def features_websessions(df_customers, df_websessions):
     """ Extract from the websessions information features representing the user activity on ASOS site
-    :return:
+    :return: DataFrame with the websessions information useful for the ML system
     """
-    df_websessions = load_web_sessions()
-    df_customers = load_customers()
-    df_websessions = df_customers.join(df_websessions, df_customers.customerId2 == df_websessions.customerId2,
-                                                 'inner')
+    df_websessions = df_customers.join(df_websessions, "customerId2", 'inner')
     res_counts = df_websessions.groupBy('customerId2').count().alias('nb_sessions')
 
     res_agg = df_websessions.groupBy('customerId2').agg(
@@ -122,17 +119,19 @@ def features_websessions():
         (count(when(df_websessions.productsPurchasedTotalCount != 0, True)) / count('customerId2')).alias(
             'p_not0_productsPurchasedTotalCount'),
     )
-    res_agg.show()
 
     res = res_counts.join(res_agg, 'customerId2')
     return res
 
 if __name__=="__main__":
-    dir = dir_arg()
+    dir = arg_dir()
 
-    df = features_websessions()
-    logger.info("Features from the customers table: {shape} {dtypes}"
-                .format(shape=df.shape, dtypes=df.dtypes))
+    df_customers = load_customers(dir)
+    df_websessions = load_web_sessions(dir)
+
+    df = features_websessions(df_customers, df_websessions)
+    logger.info("Features from the customers table: {dtypes}"
+                .format(dtypes=df.dtypes))
 
     df.toPandas().to_csv(get_file_sessions_features(dir), sep='\t', header=True, index=False)
     df.write.parquet(get_parket_sessions_features(dir))

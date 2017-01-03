@@ -1,29 +1,35 @@
 import logging
 import optparse
+from pyspark.context import SparkContext
+from pyspark.sql import SQLContext
+
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import DecisionTreeClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 import sys
-from utils import load_data, print_metrics, vectorize_data, subsampling
+from utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-subsmpl = True
-if __name__ == "__main__":
+sc = SparkContext()
+sqlContext = SQLContext(sc)
 
-    data = load_data()
+if __name__ == "__main__":
+    dir, subsmpl = arg_dir_subsmpl()
+    data = load_data_parquet(dir, sqlContext)
     data = vectorize_data(data)
     print("#Instances in data:\n")
     data.groupBy("label").count().show()
 
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
-    print("#Instances in trainingData:\n")
-    data.groupBy("label").count().show()
 
     if subsmpl:
         trainingData = subsampling(trainingData)
+
+    print("#Instances in trainingData:\n")
+    trainingData.groupBy("label").count().show()
 
     label_indexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
     feature_indexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=2).fit(data)

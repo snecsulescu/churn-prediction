@@ -3,17 +3,23 @@ from pyspark.ml.classification import LogisticRegression, LogisticRegressionMode
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import StringIndexer
 
-from utils import load_data, print_metrics, vectorize_data, subsampling
+from utils import *
 
-subsmpl = True
+from pyspark.context import SparkContext
+from pyspark.sql import SQLContext
+
+sc = SparkContext()
+sqlContext = SQLContext(sc)
+
 if __name__ == "__main__":
-    data = load_data()
+    dir, subsmpl = arg_dir_subsmpl()
+
+    data = load_data_parquet(dir, sqlContext)
     data = vectorize_data(data)
 
     print("#Instances in data:\n")
     data.groupBy("label").count().show()
 
-    data.groupBy("label").count().show()
     (training_data, test_data) = data.randomSplit([0.7, 0.3])
 
     if subsmpl:

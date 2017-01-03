@@ -11,9 +11,7 @@ from pyspark.mllib.regression import LabeledPoint
 from pyspark.sql import SQLContext
 from pyspark.sql.functions import col
 from pyspark.sql.types import *
-
-sc = SparkContext()
-sqlContext = SQLContext(sc)
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -23,14 +21,16 @@ def labelData(data, cls):
     return data.map(lambda row: LabeledPoint(cls, [row]))
 
 
-def load_data(dir):
+def load_data_parquet(dir, sqlContext):
     """ Load customers features extracted from orders and websessions
     :return: DataFrame with all the features joint on customerId2
     """
     logger.info("Loading features about websessions from {file}".format(file=get_parket_sessions_features(dir)))
     df_customers_websessions = sqlContext.read.parquet(get_parket_sessions_features(dir))
+    df_pd_customers_features = pd.read_pickle(get_pickle_orders_features(dir))
+    df_customers_features = sqlContext.createDataFrame(df_pd_customers_features)
 
-    df_customers_features = sqlContext.read.parquet(get_parket_orders_features(dir))
+    #df_customers_features = sqlContext.read.parquet(get_parket_orders_features(dir))
 
     df_customers = df_customers_features.join(df_customers_websessions, 'customerId2')
     logger.info(df_customers.dtypes)
@@ -88,12 +88,11 @@ def subsampling(data):
 
     data_sampled = data.sampleBy('label', fractions={0: ratio, 1: 1.0})
 
-    data_sampled.groupBy("label").count().show()
     return data_sampled
 
 
 def get_dir_customers(dir):
-    return '{dir}/customers/'.format(dir=dir)
+    return '{dir}/customer/'.format(dir=dir)
 
 
 def get_dir_receipts(dir):
@@ -128,12 +127,31 @@ def get_parket_sessions_features(dir):
     return '{dir}/customers_sessions_features.parquet'.format(dir=dir)
 
 
-def dir_arg():
+def arg_dir_subsmpl():
     parser = optparse.OptionParser()
-    parser.add_option('-dir', '--dir',
+    parser.add_option('-d', '--dir',
                       dest="dir",
                       type="string",
-                      help="The data directory"
+                      help="The data directory."
+                      )
+    parser.add_option('-s', '--subsample',
+                      action="store_true",
+                      help="Set the option is you want to subsample the training data."
+                      )
+    options, remainder = parser.parse_args()
+
+    if options.dir is None:
+        sys.exit("You must enter the main directory path where the customers, receipts and returns can be found.")
+
+    return options.dir, options.subsample
+
+
+def arg_dir():
+    parser = optparse.OptionParser()
+    parser.add_option('-d', '--dir',
+                      dest="dir",
+                      type="string",
+                      help="The data directory."
                       )
 
     options, remainder = parser.parse_args()

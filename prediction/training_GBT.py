@@ -1,18 +1,24 @@
 import logging
 
+from pyspark.context import SparkContext
+from pyspark.sql import SQLContext
+
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import GBTClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 
-from utils import  load_data, print_metrics, vectorize_data, subsampling
+from utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-subsmpl = True
+sc = SparkContext()
+sqlContext = SQLContext(sc)
+
 if __name__=="__main__":
-    data = load_data()
+    dir, subsmpl = arg_dir_subsmpl()
+    data = load_data_parquet(dir,sqlContext)
     data = vectorize_data(data)
     print("#Instances in data:\n")
     data.groupBy("label").count().show()
